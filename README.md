@@ -21,5 +21,5 @@ Thirdly, I tried moving the image block along with some exta elements along ever
 
 Lastly, I combined the second and third approach and got to learn some extra syntax of shared memory. I followed this link - https://devblogs.nvidia.com/using-shared-memory-cuda-cc/.
 
-Going through the forums I also learnt that sometimes 16x16 blockWidth can be better than 32x32, reason being that by smaller blockSizes, all the threads per block can get allocated for the task purpose.
+Going through the forums I also learnt that sometimes 16x16 blockWidth can be better than 32x32, reason being that by smaller blockSizes, all the threads per block can get allocated for the task purpose. Example, if thread limit is 1536, then 16x16 fits nicely as 1536 is a multiple of 256 but 1024 is not. A good point indeed!
 
