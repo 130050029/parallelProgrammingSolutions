@@ -25,3 +25,18 @@ Lastly, I combined the second and third approach and got to learn some extra syn
 
 Going through the forums I also learnt that sometimes 16x16 blockWidth can be better than 32x32, reason being that by smaller blockSizes, all the threads per block can get allocated for the task purpose. Example, if thread limit is 1536, then 16x16 fits nicely as 1536 is a multiple of 256 but 1024 is not. A good point indeed!
 
+# Problem Set Three Completed!
+
+Another interesting computer vision appliation where we were writing a part of the algorithm known as Tone-Mapping. It normalizes the histogram of luminance to avoid problems of representing over-bright pixels on digital screens. The basic algorithm itself is very interesting.
+
+However, for our part, we were supposed to only generate histograms and cumulative distributive function over that histogram. The second one was a clear example of Scan Primitive which we learned in our class. I wrote Hillis-Steele Scan for this, as the number of bins were quite small and it is more step-efficient.
+
+Initially, I was using more __syncthreads(), to avoid contention in reading and writing, but then on searching for something more efficient, I stumbled across a double buffered version of Hillis-Steele scan, which works just as fine.
+
+Generating histogram, I used the most simplest implementation using atomicAdds.
+
+I was also trying the Method A from this paper -- https://pdfs.semanticscholar.org/2325/0770d034de0602586dc039fe1c24a6b070a8.pdf. It claimed to remove the need of atomicAdd by simulating a software mutex, which is the only bottleneck in parallel histogram algorithm. However, I think I have made some mistakes in its implementation and it didn't give me correct results. I will check that later and will move on the next lecture for now.
+
+Another thing to note is that performing histogram on a set of data, requires finding the range, i.e. minimum and maximum in the data. It boiled down to writing a Reduce algorithm, since minimum and maximum are binary and associative operators.
+
+I liked working on this problem as I got to learn more new and interesting things!
