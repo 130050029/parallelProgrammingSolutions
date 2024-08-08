@@ -40,3 +40,11 @@ I was also trying the Method A from this paper -- https://pdfs.semanticscholar.o
 Another thing to note is that performing histogram on a set of data, requires finding the range, i.e. minimum and maximum in the data. It boiled down to writing a Reduce algorithm, since minimum and maximum are binary and associative operators.
 
 I liked working on this problem as I got to learn more new and interesting things!
+
+# All Problem Sets Completed!
+
+Problem Set 4 was about Red-Eye Removal Algorithm of Computer Vision. But we had to implement only the sorting part where the pixels are sorted according to the scores assigned to each one of them. And I implemented LSB Parallel Radix Sort for this.
+
+Problem Set 5 was about achieving the fastest histogram computation on our particular machine.
+
+Problem Set 6 was about Blending Two images using Jacobi Iterative Method. The algorithm was quite simple to implement but properly writing code was necessary.
