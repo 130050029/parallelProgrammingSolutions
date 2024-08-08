@@ -105,6 +105,24 @@
 #include <algorithm>
 #include <cassert>
 #include <cuda_runtime.h>
+
+
+#define gpuErrchk() { gpuAssert(__FILE__, __LINE__); }
+inline void gpuAssert(const char* file, int line, bool abort = true)
+{
+    cudaDeviceSynchronize();
+    cudaError_t code = cudaGetLastError();
+    if (code != cudaSuccess)
+    {
+        fprintf(stderr, "GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+        if (abort) exit(code);
+    }
+}
+
+
+
+
+
 __global__
 void gaussian_blur(const unsigned char* const inputChannel,
                    unsigned char* const outputChannel,
@@ -573,6 +591,7 @@ void allocateMemoryAndCopyToGPU(const size_t numRowsImage, const size_t numColsI
 }
 
 void your_gaussian_blur(const uchar4 * const h_inputImageRGBA, uchar4 * const d_inputImageRGBA,
+//void your_gaussian_blur(uchar4 * const d_inputImageRGBA,
                         uchar4* const d_outputImageRGBA, const size_t numRows, const size_t numCols,
                         unsigned char *d_redBlurred, 
                         unsigned char *d_greenBlurred, 
@@ -608,7 +627,10 @@ void your_gaussian_blur(const uchar4 * const h_inputImageRGBA, uchar4 * const d_
 
   // Call cudaDeviceSynchronize(), then call checkCudaErrors() immediately after
   // launching your kernel to make sure that you didn't make any mistakes.
-  cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+  cudaDeviceSynchronize(); 
+  checkCudaErrors(cudaGetLastError());
+//  gpuErrchk();
+
 
   //TODO: Call your convolution kernel here 3 times, once for each color channel.
 

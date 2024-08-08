@@ -86,7 +86,8 @@
 #include <iostream>
 #include <cmath>
 
-const int BLOCK_SIZE = 512;
+const int BLOCK_SIZE = 1024;
+//const int BLOCK_SIZE = 1024;
 
 __device__
 float min_k(float a, float b){
@@ -199,7 +200,7 @@ __global__
 void histogram_atomic(unsigned int* d_histo_out, const float* const d_input_array, int input_size, float lumMin, float lumRange, unsigned int numBins){
    unsigned int input_id = threadIdx.x + blockDim.x * blockIdx.x;//mapping to input data
 
-   if (input_id > input_size) {
+   if (input_id >= input_size) {
        return;
    }
 
@@ -217,14 +218,29 @@ void histogram_atomic_shared(unsigned int* d_histo_out, const float* const d_inp
 
    extern __shared__ unsigned int sh_data_array[];
 
-   if (input_id < numBins){
-      sh_data_array[input_id] = d_histo_out[input_id];
-   }
-   __syncthreads();
-
-   if (input_id > input_size) {
+   if (input_id >= input_size) {
        return;
    }
+   
+   // Make this initialization generic with respect to BLOCK_SIZE
+   
+   int num_data_block = numBins/BLOCK_SIZE;
+   
+   if (num_data_block*BLOCK_SIZE != numBins) {
+       num_data_block = num_data_block +1;
+   }
+   
+   for (int i=0; i< num_data_block; i++){
+       unsigned int sh_data_index = threadIdx.x + i*BLOCK_SIZE;//mapping to input data
+	   if (sh_data_index < numBins){
+	       sh_data_array[sh_data_index] = 0;
+	   }
+   }
+
+   //if (threadIdx.x < numBins){
+   //   sh_data_array[threadIdx.x] = 0
+   //}
+   __syncthreads();
 
    //bin = (lum[i] - lumMin) / lumRange * numBins; calculating the bin to which
    unsigned int bin = ((d_input_array[input_id] - lumMin)/lumRange)*numBins;
@@ -236,9 +252,18 @@ void histogram_atomic_shared(unsigned int* d_histo_out, const float* const d_inp
    
    __syncthreads();
    
-   if (input_id < numBins){
-      d_histo_out[input_id] = sh_data_array[input_id];
+   for (int i=0; i< num_data_block; i++){
+       unsigned int sh_data_index = threadIdx.x + i*BLOCK_SIZE;//mapping to input data
+	   if (sh_data_index < numBins){
+	       atomicAdd(&d_histo_out[sh_data_index], sh_data_array[sh_data_index]);
+	   }
    }
+   
+   //if (threadIdx.x < numBins){
+   //   atomicAdd(&d_histo_out[threadIdx.x], sh_data_array[threadIdx.x]);
+   //}
+   
+   __syncthreads();
 }
 
 //Histogram with simulated atomic additions. -- https://pdfs.semanticscholar.org/2325/0770d034de0602586dc039fe1c24a6b070a8.pdf
@@ -246,21 +271,25 @@ __global__
 void histogram_simulated_atomic(unsigned int* d_histo_out, const float* const d_input_array, int input_size, float lumMin, float lumRange, unsigned int numBins){
    unsigned int input_id = threadIdx.x + blockDim.x * blockIdx.x;//mapping to input data
 
-   if (input_id > input_size) {
+   if (input_id >= input_size) {
        return;
    }
 
    //bin = (lum[i] - lumMin) / lumRange * numBins; calculating the bin to which
-   volatile unsigned int bin = ((d_input_array[input_id] - lumMin)/lumRange)*numBins;
+   unsigned int bin;
+   bin = ((d_input_array[input_id] - lumMin)/lumRange)*numBins;
    if (bin == numBins) {// only in case for pixels with maximum intensity
        bin = numBins -1;
    }
+   
    unsigned int tagged;
+   volatile unsigned int bin_t = (unsigned int) bin;
+
    do{
-      unsigned int w_val = d_histo_out[bin] & 0x7FFFFFF; // using first 5 bits for tagging with thread_id;
-      tagged = input_id << 27 | w_val;
-      d_histo_out[bin] = tagged;
-   } while (d_histo_out[bin] != tagged);
+      unsigned int w_val = d_histo_out[bin_t] & 0x7FFFFFF; // using first 5 bits for tagging with thread_id;
+      tagged = (input_id << 27) | (w_val+1);
+      d_histo_out[bin_t] = tagged;
+   } while (d_histo_out[bin_t] != tagged);
    //atomicAdd(&d_histo_out[bin],1);
 }
 
@@ -363,16 +392,50 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
    unsigned int* d_histo_out;
    unsigned int n_blocks = ceil(1.0f*input_size/BLOCK_SIZE);
    unsigned int SH_MEM_BYTES = sizeof(unsigned int) * numBins;
+
+// SOME EXPERIMENTS
+
+//   unsigned int *h_histo_out_temp = (unsigned int *) malloc(sizeof(unsigned int)*numBins);
+
   
    checkCudaErrors(cudaMalloc(&d_histo_out, sizeof(unsigned int) * numBins));
    checkCudaErrors(cudaMemset(d_histo_out, 0, sizeof(unsigned int) * numBins));
    
-   histogram_atomic<<<n_blocks, BLOCK_SIZE>>>(d_histo_out, d_logLuminance, input_size, min_logLum, lumRange, numBins);
 
-   //histogram_atomic_shared<<<n_blocks, BLOCK_SIZE, SH_MEM_BYTES>>>(d_histo_out, d_logLuminance, input_size, min_logLum, lumRange, numBins);
+   histogram_atomic_shared<<<n_blocks, BLOCK_SIZE, SH_MEM_BYTES>>>(d_histo_out, d_logLuminance, input_size, min_logLum, lumRange, numBins);
+
+   //checkCudaErrors(cudaMemcpy(h_histo_out_temp, d_histo_out, sizeof(unsigned int) * numBins, cudaMemcpyDeviceToHost));
+
+   //std::cout<<"\n";
+   //for (int i=0 ; i< numBins; i++)
+   //	std::cout<<h_histo_out_temp[i]<<" ";
+   //std::cout<<"\n";
+
+   //checkCudaErrors(cudaMemset(d_histo_out, 0, sizeof(unsigned int) * numBins));
+   //histogram_atomic<<<n_blocks, BLOCK_SIZE>>>(d_histo_out, d_logLuminance, input_size, min_logLum, lumRange, numBins);
+
+   //checkCudaErrors(cudaMemcpy(h_histo_out_temp, d_histo_out, sizeof(unsigned int) * numBins, cudaMemcpyDeviceToHost));
+
+   
+   //std::cout<<"\n";
+   //for (int i=0 ; i< numBins; i++)
+   //	std::cout<<h_histo_out_temp[i]<<" ";
+   //std::cout<<"\n";
+
+
+// EXPERIMENTS END
 
    //Histogram without atomicAdds.
    //histogram_simulated_atomic<<<n_blocks, BLOCK_SIZE>>>(d_histo_out, d_logLuminance, input_size, min_logLum, lumRange, numBins);
+
+   unsigned int* h_histo_out;
+   h_histo_out = (unsigned int*) malloc(sizeof(unsigned int) * numBins);
+   checkCudaErrors(cudaMemcpy(h_histo_out, d_histo_out, SH_MEM_BYTES, cudaMemcpyDeviceToHost));
+
+   //std::cout<<"TEST PRINT : "<<h_histo_out[34]<<"\n";
+   //std::cout<<"Input Size : "<<input_size<<" Bins : "<<numBins<<"\n";
+
+   //checkCudaErrors(cudaGetLastError());
 
    SH_MEM_BYTES = sizeof(unsigned int) * numBins;
 
